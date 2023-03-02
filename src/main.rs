@@ -36,10 +36,10 @@ fn main() {
 
     let mut queries = [
         connection
-            .prepare("SELECT id, ip_start, ip_end, country, stateprov, city FROM ips NOT INDEXED WHERE ip_start <= ?1 AND ip_end >= ?2 LIMIT 1")
+            .prepare("SELECT id, ip_start, ip_end, country, stateprov, city FROM ips WHERE ip_start <= ?1 AND ip_end >= ?2 LIMIT 1")
             .unwrap(),
         connection
-            .prepare("SELECT id, ip_start, ip_end, country, stateprov, city FROM ips WHERE ip_start <= ?1 AND ip_end >= ?2 LIMIT 1")
+            .prepare("SELECT id, ip_start, ip_end, country, stateprov, city FROM ips NOT INDEXED WHERE ip_start <= ?1 AND ip_end >= ?2 LIMIT 1")
             .unwrap()
     ];
 
@@ -87,16 +87,25 @@ fn main() {
         });
 
         println!(
-            "Found: {:?}",
-            data.map(|a| format!("{}", a.unwrap().country.clone()))
-                .collect::<Vec<String>>()
-        );
-
-        println!(
             "Fetched and parsed in:   {: >12}ns ~ {: >12}ms",
             now.elapsed().as_nanos(),
             now.elapsed().as_nanos() as f64 / 1_000_000.0
         );
+
+        println!(
+            "Found: {:?}",
+            data.map(|b| {
+                let a = b.unwrap();
+                format!(
+                    "{}, {}, {}",
+                    a.country.clone(),
+                    a.stateprov.clone(),
+                    a.city.clone()
+                )
+            })
+            .collect::<Vec<String>>()
+        );
+
         println!("");
     }
 }
@@ -176,8 +185,8 @@ fn init_data(connection: &Connection) {
         .unwrap();
 
     println!("inserting");
-    for (i, d) in data.iter().array_chunks::<128>().enumerate() {
-        println!("{i}/{}", data.len() / 128);
+    for (i, d) in data.iter().array_chunks::<512>().enumerate() {
+        println!("{i}/{}", data.len() / 512);
         let t = format!(
             "INSERT INTO ips
                 (id, ip_start, ip_end, country, stateprov, city)
@@ -204,15 +213,13 @@ struct Record {
 }
 
 fn data() -> Vec<Record> {
-    let file = read_to_string(File::open("~/Downloads/DbIp_Edu.sql").unwrap()).unwrap();
+    let file = read_to_string(File::open("/home/pavel/Downloads/DbIp_Edu.sql").unwrap()).unwrap();
 
-    let data = file
-        .lines()
-        .skip(42)
-        .take(698 - 42)
-        .collect::<Vec<&str>>()
-        .join("")
-        .replace("\n", "");
+    let mut data = file.lines().skip(42).collect::<Vec<&str>>();
+
+    data.reverse();
+
+    let data = data.join("").replace("\n", "");
 
     Regex::new("\\),(\\(|\\n)")
         .unwrap()
